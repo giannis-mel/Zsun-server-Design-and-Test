@@ -1,0 +1,236 @@
+/*
+   Rensselaer Polytechnic Institute (RPI)
+   
+   Meleziadis Ioannis AEM 8760
+*/
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <time.h>
+#include <omp.h>
+
+
+void error(char *msg)
+{
+  perror(msg);
+  exit(0);
+}
+
+int main(int argc, char *argv[])
+{
+
+	#pragma omp parallel num_threads(6)
+	{
+	
+  int sockfd, portno, n;
+
+  struct sockaddr_in serv_addr;
+  
+  struct hostent *server; //defines a host computer on the internet
+
+  char buffer[256];
+  if (argc < 3) {
+    fprintf(stderr,"usage %s hostname port\n", argv[0]);
+    exit(0);
+  }
+  
+  portno = atoi(argv[2]);
+  
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) 
+    error("ERROR opening socket");
+  
+  server = gethostbyname(argv[1]); //argv[1] contains the name of a host
+  if (server == NULL) {
+    fprintf(stderr,"ERROR, no such host\n");
+    exit(0);
+  }
+  
+  //set fields in serv_addr
+  bzero((char *) &serv_addr, sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  bcopy((char *)server->h_addr, 
+        (char *)&serv_addr.sin_addr.s_addr,
+        server->h_length);
+  serv_addr.sin_port = htons(portno);
+  
+
+   
+  //the connect function establishes a connection with the server
+  if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) 
+    error("ERROR connecting");
+    //Start counting time
+  clock_t start, end;
+  
+  
+  bzero(buffer,256);
+  
+  //Diavazei prwta apo server
+  n = read(sockfd,buffer,255);
+  if (n < 0) 
+    error("ERROR reading from socket");
+  
+  
+  printf("%s\n",buffer);
+  
+  bzero(buffer,256);
+
+  strcpy(buffer,"Send\n");
+  
+  //Stelnei tin entoli
+  //fgets(buffer,255,stdin);
+  n = write(sockfd,buffer,strlen(buffer));
+  if (n < 0) 
+    error("ERROR writing to socket");
+  
+    
+
+  
+  
+  
+  //you chose to receive messages
+  if(strcmp(buffer,"Receive\n") == 0) {
+	  
+	bzero(buffer,256);
+	// Tell me your name
+	n = read(sockfd,buffer,255);
+	if (n < 0) 
+		error("ERROR reading from socket");
+	printf("%s",buffer);
+	  
+	bzero(buffer,256);
+	// Sends name
+	fgets(buffer,255,stdin);
+	n = write(sockfd,buffer,strlen(buffer));
+	if (n < 0) 
+		error("ERROR writing to socket");
+	
+	// header gets the size of the message stream from server
+	char header[12];
+	int size = 0;
+	
+	bzero(header,12);
+	// From
+	n = recv(sockfd, header, 12,0);
+	if(n<0)
+		error("ERROR reading from socket");
+		
+	printf("header is %s\n",header);
+		
+	size = atoi(header);
+	
+	// if size==0 then there are no messages for this user
+	if(size == 0) {printf("No messages for you \n"); exit(1);}
+	
+	// create a buffer for the whole message stream
+	char completeMessage[size];
+	bzero(completeMessage,size);
+	n = read(sockfd, completeMessage, size);
+	if(n<0)
+		error("ERROR reading from socket");
+	// print all the messages at once
+	printf("%s",completeMessage);
+		
+	  
+	  
+  //you chose to send message
+  }else if(strcmp(buffer,"Send\n") == 0) {
+	  
+	char another[] = "Yes";
+	while(strcmp(another,"Yes") == 0) {
+	  
+		
+		start = clock();
+		//From
+		bzero(buffer,256);
+		n = read(sockfd,buffer,255);
+		if (n < 0) 
+			error("ERROR reading from socket");
+		printf("%s",buffer);
+		
+		if(strcmp(buffer,"Server is full try later") == 0){ printf("\n"); exit(1); }
+		
+		bzero(buffer,256);
+		//Stelnei tin entoli
+		strcpy(buffer,"John\n");
+		//fgets(buffer,255,stdin);
+		n = write(sockfd,buffer,strlen(buffer));
+		if (n < 0) 
+			error("ERROR writing to socket");
+		//To
+		bzero(buffer,256);
+		n = read(sockfd,buffer,255);
+		if (n < 0) 
+			error("ERROR reading from socket");
+		printf("%s",buffer);
+		bzero(buffer,256);
+		//Stelnei tin entoli
+		strcpy(buffer,"Kate\n");
+		//fgets(buffer,255,stdin);
+		n = write(sockfd,buffer,strlen(buffer));
+		if (n < 0) 
+			error("ERROR writing to socket");
+		//Message
+		bzero(buffer,256);
+		n = read(sockfd,buffer,255);
+		if (n < 0) 
+			error("ERROR reading from socket");
+		printf("%s",buffer);
+		bzero(buffer,256);
+		//Stelnei tin entoli
+		strcpy(buffer,"Test message\n");
+		//fgets(buffer,255,stdin);
+		n = write(sockfd,buffer,strlen(buffer));
+		if (n < 0)
+			error("ERROR writing to socket");
+		
+		end = clock();
+		  double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+		printf("Time waited is : %f seconds !\n",cpu_time_used);
+		
+		//Send another ? or full
+		bzero(buffer,256);
+		n = read(sockfd,buffer,255);
+		if (n < 0) 
+			error("ERROR reading from socket");
+		
+		printf("%s",buffer);
+		bzero(buffer,256);
+		//Stelnei tin entoli
+		strcpy(buffer,"Yes\n");
+		//fgets(buffer,255,stdin);
+		//bzero(buffer,256);
+		n = write(sockfd,buffer,strlen(buffer));
+		if (n < 0) 
+			error("ERROR writing to socket");
+		strcpy(another,buffer);
+		strtok(another,"\n");
+		
+		
+		
+	}
+	
+	
+  }
+  else{
+	bzero(buffer,256);
+	//disconnect from server
+	n = read(sockfd,buffer,255);
+	if (n < 0) 
+		error("ERROR reading from socket");
+	printf("%s",buffer);
+  }
+  
+  
+	}
+
+  
+  return 0;
+}
